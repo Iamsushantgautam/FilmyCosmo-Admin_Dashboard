@@ -7,6 +7,7 @@ const MovieSchema = new mongoose.Schema({
   tags: [String],
   posterUrl: { type: String },
   screenshots: [String],
+  isActive: { type: Boolean, default: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 

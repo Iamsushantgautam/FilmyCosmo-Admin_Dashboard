@@ -1,16 +1,34 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
-export default function MovieCard({ movie }) {
+export default function MovieCard({ movie, compact = false }) {
+  const navigate = useNavigate();
+
+  const handleClick = () => {
+    navigate(`/movie/${movie._id}`);
+  };
+
+  const primaryGenre = (movie.tags && movie.tags[0]) || 'Unknown';
+
   return (
-    <div style={{ border: '1px solid #eee', padding: 12, borderRadius: 8 }}>
-      {movie.posterUrl && <img src={movie.posterUrl} alt={movie.title} style={{ width: '100%', height: 300, objectFit: 'cover', borderRadius: 6 }} />}
-      <h3>{movie.title} ({movie.year || '—'})</h3>
-      <p>{movie.description}</p>
-      {movie.screenshots && movie.screenshots.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginTop: 8 }}>
-          {movie.screenshots.map((s,i) => <img key={i} src={s} alt={`ss-${i}`} style={{ width: 100, height: 60, objectFit: 'cover', borderRadius: 4 }} />)}
-        </div>
-      )}
+    <div
+      className={compact ? 'movie-card compact' : 'movie-card'}
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleClick()}
+    >
+      <div className="movie-card-poster-wrapper">
+        {movie.posterUrl && (
+          <img
+            src={movie.posterUrl}
+            alt={movie.title}
+            className="movie-card-poster"
+          />
+        )}
+      </div>
+      <h3 className="movie-card-title">{movie.title}</h3>
+      <p className="movie-card-genre">{primaryGenre}</p>
     </div>
   );
 }

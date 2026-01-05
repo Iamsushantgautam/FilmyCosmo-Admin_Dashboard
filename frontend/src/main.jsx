@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import App from './App';
 import Home from './pages/Home';
 import Admin from './pages/Admin';
+import MovieGrid from './pages/moviegrip';
+import MovieDetail from './pages/MovieDetail';
 import './index.css';
 
 createRoot(document.getElementById('root')).render(
@@ -13,6 +15,8 @@ createRoot(document.getElementById('root')).render(
         <Route path="/" element={<App />}>
           <Route index element={<Home />} />
           <Route path="admin" element={<Admin />} />
+          <Route path="moviegrip" element={<MovieGrid />} />
+          <Route path="movie/:id" element={<MovieDetail />} />
         </Route>
       </Routes>
     </BrowserRouter>

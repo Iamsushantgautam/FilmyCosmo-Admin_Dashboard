@@ -22,6 +22,7 @@ const uploadBuffer = (fileBuffer, folder = 'movie_app') => {
   });
 };
 
+
 // ------------------- GET all movies -------------------
 router.get('/', async (req, res) => {
   try {
@@ -33,16 +34,31 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ------------------- GET single movie by ID -------------------
+router.get('/:id', async (req, res) => {
+  try {
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) {
+      return res.status(404).json({ msg: 'Movie not found' });
+    }
+    res.json(movie);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server error', error: err.message });
+  }
+});
+
 // ------------------- CREATE movie (admin only) -------------------
 router.post(
   '/',
   [
     auth,
+    isAdmin,
     upload.fields([{ name: 'poster', maxCount: 1 }, { name: 'screenshots', maxCount: 6 }])
   ],
   async (req, res) => {
     try {
-      const { title, description, year, tags, posterUrl, screenshots } = req.body;
+      const { title, description, year, tags, posterUrl, screenshots, isActive } = req.body;
       if (!title) return res.status(400).json({ msg: 'Title is required' });
 
       let poster = posterUrl || '';
@@ -68,6 +84,7 @@ router.post(
         tags: tags ? tags.split(',').map(t => t.trim()) : [],
         posterUrl: poster,
         screenshots: screenshotUrls,
+        isActive: typeof isActive === 'boolean' ? isActive : true,
         createdBy: req.user.id
       });
 
@@ -83,7 +100,7 @@ router.post(
 // ------------------- EDIT / UPDATE movie (admin only) -------------------
 router.put('/:id', [auth, isAdmin], async (req, res) => {
   try {
-    const { title, description, year, tags, posterUrl, screenshots } = req.body;
+    const { title, description, year, tags, posterUrl, screenshots, isActive } = req.body;
     const movie = await Movie.findById(req.params.id);
     if (!movie) return res.status(404).json({ msg: 'Movie not found' });
 
@@ -93,6 +110,7 @@ router.put('/:id', [auth, isAdmin], async (req, res) => {
     if (tags) movie.tags = tags.split(',').map(t => t.trim());
     if (posterUrl) movie.posterUrl = posterUrl;
     if (screenshots) movie.screenshots = screenshots;
+    if (typeof isActive === 'boolean') movie.isActive = isActive;
 
     await movie.save();
     res.json({ msg: 'Movie updated successfully', movie });
