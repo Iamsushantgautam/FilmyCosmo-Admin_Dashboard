@@ -31,9 +31,10 @@ export default function MovieDetail() {
   if (error) return <p className="error">{error}</p>;
   if (!movie) return <p>Movie not found.</p>;
 
-  const handleDownload = (quality) => {
-    // Placeholder download behavior; hook this to real download links if available
-    alert(`Starting download for "${movie.title}" in ${quality} quality (demo).`);
+  const handleDownload = (url) => {
+    if (url) {
+      window.open(url, '_blank');
+    }
   };
 
   return (
@@ -63,14 +64,25 @@ export default function MovieDetail() {
           )}
           {movie.description && <p className="movie-description">{movie.description}</p>}
 
-          <div className="download-section">
-            <h3>Download</h3>
-            <div className="download-buttons">
-              <button onClick={() => handleDownload('480p')}>Download 480p</button>
-              <button onClick={() => handleDownload('720p')}>Download 720p</button>
-              <button onClick={() => handleDownload('1080p')}>Download 1080p</button>
+          {movie.downloadLinks && movie.downloadLinks.length > 0 && (
+            <div className="download-section">
+              <h3>Download Links</h3>
+              <div className="download-buttons">
+                {movie.downloadLinks.map((link, index) => (
+                  <div key={index} className="download-link-card">
+                    <button 
+                      onClick={() => handleDownload(link.url)}
+                      className="download-button"
+                    >
+                      <span className="download-label">{link.label || `Download ${index + 1}`}</span>
+                      {link.quality && <span className="download-quality">{link.quality}</span>}
+                      {link.size && <span className="download-size">{link.size}</span>}
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

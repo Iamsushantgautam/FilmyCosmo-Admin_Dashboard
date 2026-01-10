@@ -19,12 +19,31 @@ export default function Admin() {
     fetchConfig();
   }, []);
 
+  // Re-fetch movies when token changes (login/logout)
+  useEffect(() => {
+    if (token) {
+      fetchMovies();
+    }
+  }, [token]);
+
   const fetchMovies = async () => {
     try {
-      const res = await axios.get(`${API}/movies`);
+      // Use admin endpoint if logged in (includes inactive movies), otherwise public
+      const url = token ? `${API}/movies/admin/all` : `${API}/movies`;
+      const headers = token ? { headers: { 'x-auth-token': token } } : {};
+      const res = await axios.get(url, headers);
       setMovies(res.data);
     } catch (err) {
       console.error(err);
+      // If admin endpoint fails, try public endpoint
+      if (token) {
+        try {
+          const res = await axios.get(`${API}/movies`);
+          setMovies(res.data);
+        } catch (e) {
+          console.error('Failed to fetch movies:', e);
+        }
+      }
     }
   };
 
@@ -77,71 +96,6 @@ export default function Admin() {
   };
 
   const handleSaveConfig = async () => {
-  const startEditMovie = (movie) => {
-    setEditingMovie({
-      _id: movie._id,
-      title: movie.title || '',
-      description: movie.description || '',
-      year: movie.year || '',
-      tags: (movie.tags || []).join(', '),
-      isActive: movie.isActive !== false,
-    });
-  };
-
-  const handleEditFieldChange = (field, value) => {
-    setEditingMovie((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const handleSaveMovie = async () => {
-    if (!editingMovie) return;
-    if (!token) {
-      alert('Please login as admin to update movies');
-      return;
-    }
-    const { _id, title, description, year, tags, isActive } = editingMovie;
-    try {
-      const payload = {
-        title,
-        description,
-        year,
-        tags,
-        isActive: !!isActive,
-      };
-      const res = await axios.put(`${API}/movies/${_id}`, payload, {
-        headers: { 'x-auth-token': token },
-      });
-      const updatedMovie = res.data.movie;
-      setMovies((prev) => prev.map((m) => (m._id === updatedMovie._id ? updatedMovie : m)));
-      setEditingMovie(null);
-      alert('Movie updated');
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.msg || 'Failed to update movie');
-    }
-  };
-
-  const toggleMovieActive = async (movie) => {
-    if (!token) {
-      alert('Please login as admin to change movie visibility');
-      return;
-    }
-    try {
-      const res = await axios.put(
-        `${API}/movies/${movie._id}`,
-        { isActive: !movie.isActive },
-        { headers: { 'x-auth-token': token } }
-      );
-      const updatedMovie = res.data.movie;
-      setMovies((prev) => prev.map((m) => (m._id === updatedMovie._id ? updatedMovie : m)));
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.msg || 'Failed to change visibility');
-    }
-  };
-
     if (!token) {
       alert('Please login as admin to update layout');
       return;
@@ -165,6 +119,143 @@ export default function Admin() {
       alert('Failed to update home layout');
     } finally {
       setSavingConfig(false);
+    }
+  };
+
+  const startEditMovie = (movie) => {
+    const downloadLinks = movie.downloadLinks || movie.download_links || [];
+    setEditingMovie({
+      _id: movie._id,
+      title: movie.title || movie.movie_name || '',
+      description: movie.description || movie.movie_description || '',
+      year: movie.year || movie.movie_year || '',
+      tags: Array.isArray(movie.tags) ? movie.tags.join(', ') : (movie.movie_tags ? (Array.isArray(movie.movie_tags) ? movie.movie_tags.join(', ') : movie.movie_tags) : ''),
+      isActive: movie.isActive !== false && movie.movie_show !== false,
+      downloadLinks: Array.isArray(downloadLinks) ? downloadLinks : [],
+    });
+  };
+
+  const handleEditFieldChange = (field, value) => {
+    setEditingMovie((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleSaveMovie = async () => {
+    if (!editingMovie) return;
+    if (!token) {
+      alert('Please login as admin to update movies');
+      return;
+    }
+    const { _id, title, description, year, tags, isActive, downloadLinks } = editingMovie;
+    
+    // Validate required fields
+    if (!title || title.trim() === '') {
+      alert('Movie title is required');
+      return;
+    }
+    
+    try {
+      // Map frontend fields to backend field names - only include defined values
+      const payload = {
+        movie_name: title.trim(),
+      };
+      
+      // Only include fields that have values
+      if (description !== undefined && description !== '') {
+        payload.movie_description = description.trim();
+      }
+      
+      if (year && year.toString().trim() !== '') {
+        const yearNum = parseInt(year);
+        if (!isNaN(yearNum)) {
+          payload.movie_year = yearNum;
+        }
+      }
+      
+      if (tags && tags.trim() !== '') {
+        payload.movie_tags = tags.split(',').map(t => t.trim()).filter(Boolean);
+      } else {
+        payload.movie_tags = [];
+      }
+      
+      if (isActive !== undefined) {
+        payload.movie_show = !!isActive;
+      }
+      
+      // Include download links if they exist
+      if (downloadLinks && Array.isArray(downloadLinks)) {
+        payload.download_links = downloadLinks.filter(link => link && link.label && link.url);
+      }
+      
+      const res = await axios.put(`${API}/movies/${_id}`, payload, {
+        headers: { 
+          'x-auth-token': token,
+          'Content-Type': 'application/json'
+        },
+      });
+      
+      // Refresh movies list after update
+      await fetchMovies();
+      setEditingMovie(null);
+      alert('Movie updated successfully');
+    } catch (err) {
+      console.error('Update error:', err);
+      const errorMsg = err.response?.data?.msg || err.response?.data?.error || err.message || 'Failed to update movie';
+      alert(`Update failed: ${errorMsg}`);
+    }
+  };
+
+  const addDownloadLink = () => {
+    setEditingMovie((prev) => ({
+      ...prev,
+      downloadLinks: [...(prev.downloadLinks || []), { label: '', url: '', quality: '', size: '' }],
+    }));
+  };
+
+  const removeDownloadLink = (index) => {
+    setEditingMovie((prev) => ({
+      ...prev,
+      downloadLinks: prev.downloadLinks.filter((_, i) => i !== index),
+    }));
+  };
+
+  const updateDownloadLink = (index, field, value) => {
+    setEditingMovie((prev) => ({
+      ...prev,
+      downloadLinks: prev.downloadLinks.map((link, i) => 
+        i === index ? { ...link, [field]: value } : link
+      ),
+    }));
+  };
+
+  const toggleMovieActive = async (movie) => {
+    if (!token) {
+      alert('Please login as admin to change movie visibility');
+      return;
+    }
+    try {
+      const currentState = movie.isActive !== false && movie.movie_show !== false;
+      const payload = {
+        movie_show: !currentState,
+      };
+      await axios.put(
+        `${API}/movies/${movie._id}`,
+        payload,
+        { 
+          headers: { 
+            'x-auth-token': token,
+            'Content-Type': 'application/json'
+          } 
+        }
+      );
+      // Refresh movies list after toggle
+      await fetchMovies();
+    } catch (err) {
+      console.error('Toggle visibility error:', err);
+      const errorMsg = err.response?.data?.msg || err.response?.data?.error || err.message || 'Failed to change visibility';
+      alert(`Failed to change visibility: ${errorMsg}`);
     }
   };
 
@@ -417,6 +508,53 @@ export default function Admin() {
                         Show on home page
                       </span>
                     </label>
+
+                    <div className="download-links-section">
+                      <h4>Download Links</h4>
+                      
+                      {(editingMovie.downloadLinks || []).map((link, index) => (
+                        <div key={index} className="download-link-item">
+                          <input
+                            type="text"
+                            placeholder="Label (e.g., GDrive, Direct)"
+                            value={link.label || ''}
+                            onChange={(e) => updateDownloadLink(index, 'label', e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Quality (e.g., 1080p, 720p, 480p)"
+                            value={link.quality || ''}
+                            onChange={(e) => updateDownloadLink(index, 'quality', e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Size (e.g., 2.4 GB)"
+                            value={link.size || ''}
+                            onChange={(e) => updateDownloadLink(index, 'size', e.target.value)}
+                          />
+                          <input
+                            type="url"
+                            placeholder="Download URL"
+                            value={link.url || ''}
+                            onChange={(e) => updateDownloadLink(index, 'url', e.target.value)}
+                          />
+                          <button 
+                            type="button"
+                            onClick={() => removeDownloadLink(index)}
+                            className="remove-link-btn"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                      <button 
+                        type="button"
+                        onClick={addDownloadLink}
+                        className="add-link-btn"
+                      >
+                        + Add Download Link
+                      </button>
+                    </div>
 
                     <div className="admin-edit-actions">
                       <button type="button" onClick={handleSaveMovie}>
