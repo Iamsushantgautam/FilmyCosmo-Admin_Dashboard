@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 export default function Dashboard() {
   const [searchParams] = useSearchParams();
   const [movies, setMovies] = useState([]);
@@ -28,7 +30,7 @@ export default function Dashboard() {
   const fetchMovies = async () => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch('http://localhost:5000/api/movies', {
+      const res = await fetch(`${API}/movies`, {
         headers: {
           'x-auth-token': token
         }
@@ -187,7 +189,7 @@ export default function Dashboard() {
     if (!window.confirm('Are you sure you want to delete this movie?')) return;
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:5000/api/movies/${id}`, {
+      const res = await fetch(`${API}/movies/${id}`, {
         method: 'DELETE',
         headers: { 'x-auth-token': token }
       });
@@ -257,11 +259,11 @@ export default function Dashboard() {
         }
       }
 
-      let url = 'http://localhost:5000/api/movies';
+      let url = `${API}/movies`;
       let method = 'POST';
 
       if (isEditing) {
-        url = `http://localhost:5000/api/movies/${currentId}`;
+        url = `${API}/movies/${currentId}`;
         method = 'PUT';
       }
 
