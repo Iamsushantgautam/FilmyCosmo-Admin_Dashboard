@@ -16,13 +16,22 @@ export default function Login() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
+      
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('Non-JSON response:', text);
+        throw new Error(`Server returned HTML instead of JSON. Check API URL: ${API}/auth/login`);
+      }
+      
       const data = await res.json();
       if (!res.ok) throw new Error(data.msg || 'Login failed');
 
       localStorage.setItem('token', data.token);
       navigate('/');
     } catch (err) {
-      setError(err.message);
+      console.error('Login error:', err);
+      setError(err.message || 'Login failed. Please check your connection.');
     }
   };
 

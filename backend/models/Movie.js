@@ -7,7 +7,19 @@ const DownloadLinkSchema = new mongoose.Schema(
     label: { type: String, required: true },
     url: { type: String, required: true },
     size: { type: String },
-    quality: { type: String }
+    quality: { type: String },
+    click_count: { type: Number, default: 0 }
+  },
+  { _id: false }
+);
+
+const ShortLinkSchema = new mongoose.Schema(
+  {
+    label: { type: String, required: true },
+    url: { type: String, required: true },
+    original_url: { type: String },
+    size: { type: String },
+    click_count: { type: Number, default: 0 }
   },
   { _id: false }
 );
@@ -32,6 +44,7 @@ const MovieSchema = new mongoose.Schema(
     movie_size: String,
 
     download_links: [DownloadLinkSchema],
+    short_links: [ShortLinkSchema],
 
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

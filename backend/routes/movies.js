@@ -7,6 +7,7 @@ const multer = require('multer');
 const cloudinary = require('../config/cloudinary');
 const Movie = require('../models/Movie');
 const streamifier = require('streamifier');
+const https = require('https');
 
 // Multer in-memory storage (optional)
 const storage = multer.memoryStorage();
@@ -39,7 +40,98 @@ const normalizeDownloadLinks = (links) => {
     label: link.label.trim(),
     url: link.url.trim(),
     size: link.size ? link.size.trim() : undefined,
-    quality: link.quality ? link.quality.trim() : undefined
+    quality: link.quality ? link.quality.trim() : undefined,
+    click_count: link.click_count || 0
+  }));
+};
+
+// Helper to generate short link using AdrinoLinks API
+const generateShortLink = (longUrl) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const apiToken = "f004680ca558e56e3d08f4b64e4a809f3a61845e";
+      const apiUrl = `https://adrinolinks.in/api?api=${apiToken}&url=${encodeURIComponent(longUrl)}`;
+      
+      https.get(apiUrl, (res) => {
+        let data = '';
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        res.on('end', () => {
+          try {
+            const jsonData = JSON.parse(data);
+            if (jsonData.shortenedUrl) {
+              resolve(jsonData.shortenedUrl);
+            } else {
+              resolve(longUrl); // Return original if failed
+            }
+          } catch (e) {
+            console.error('Error parsing short link response:', e);
+            resolve(longUrl); // Return original on parse error
+          }
+        });
+      }).on('error', (error) => {
+        console.error('Error generating short link:', error);
+        resolve(longUrl); // Return original on error
+      });
+    } catch (error) {
+      console.error('Error in generateShortLink:', error);
+      resolve(longUrl); // Return original on error
+    }
+  });
+};
+
+// Helper to generate short links from download links
+const generateShortLinks = async (downloadLinks) => {
+  if (!downloadLinks || !Array.isArray(downloadLinks) || downloadLinks.length === 0) {
+    return [];
+  }
+
+  const shortLinks = [];
+  for (const link of downloadLinks) {
+    if (link.url && link.url.trim()) {
+      try {
+        const shortUrl = await generateShortLink(link.url);
+        shortLinks.push({
+          label: link.label || '',
+          url: shortUrl,
+          original_url: link.url,
+          size: link.size || '',
+          click_count: 0
+        });
+      } catch (error) {
+        console.error(`Error generating short link for ${link.url}:`, error);
+        // Add original URL if short link generation fails
+        shortLinks.push({
+          label: link.label || '',
+          url: link.url,
+          original_url: link.url,
+          size: link.size || '',
+          click_count: 0
+        });
+      }
+    }
+  }
+  return shortLinks;
+};
+
+// Helper to normalize short links array
+const normalizeShortLinks = (links) => {
+  if (!links) return [];
+  if (typeof links === 'string') {
+    try {
+      links = JSON.parse(links);
+    } catch (e) {
+      return [];
+    }
+  }
+  if (!Array.isArray(links)) return [];
+  return links.filter(link => link && link.url && link.url.trim() !== '').map(link => ({
+    label: link.label ? link.label.trim() : '',
+    url: link.url.trim(),
+    original_url: link.original_url ? link.original_url.trim() : link.url.trim(),
+    size: link.size ? link.size.trim() : undefined,
+    click_count: link.click_count || 0
   }));
 };
 
@@ -57,7 +149,8 @@ const transformMovie = (movie) => {
     tags: obj.movie_tags || obj.movie_genre || obj.tags || [],
     isActive: obj.movie_show !== undefined ? obj.movie_show : (obj.isActive !== false),
     screenshots: obj.movie_screenshots || obj.screenshots || [],
-    downloadLinks: Array.isArray(obj.download_links) ? obj.download_links : []
+    downloadLinks: Array.isArray(obj.download_links) ? obj.download_links : [],
+    shortLinks: Array.isArray(obj.short_links) ? obj.short_links : []
   };
 };
 
@@ -147,6 +240,9 @@ router.post(
 
       // Normalize download links
       const normalizedDownloadLinks = normalizeDownloadLinks(download_links);
+      
+      // Generate short links from download links
+      const generatedShortLinks = await generateShortLinks(normalizedDownloadLinks);
 
       const movie = new Movie({
         movie_name,
@@ -165,6 +261,7 @@ router.post(
         movie_size,
         
         download_links: normalizedDownloadLinks,
+        short_links: generatedShortLinks,
         
         createdBy: req.user.id
       });
@@ -308,6 +405,10 @@ router.put('/:id', [auth, isAdmin, conditionalMulter], async (req, res) => {
     if (download_links !== undefined) {
       const normalizedLinks = normalizeDownloadLinks(download_links);
       movie.download_links = normalizedLinks;
+      
+      // Generate short links from download links
+      const generatedShortLinks = await generateShortLinks(normalizedLinks);
+      movie.short_links = generatedShortLinks;
     }
 
     await movie.save();
@@ -318,6 +419,42 @@ router.put('/:id', [auth, isAdmin, conditionalMulter], async (req, res) => {
       msg: 'Movie update failed', 
       error: err.message,
       details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  }
+});
+
+// ------------------- TRACK DOWNLOAD LINK CLICK -------------------
+router.post('/:id/link/:linkIndex/click', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ msg: 'Invalid Movie ID' });
+    }
+    
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) {
+      return res.status(404).json({ msg: 'Movie not found' });
+    }
+    
+    const linkIndex = parseInt(req.params.linkIndex);
+    if (isNaN(linkIndex) || linkIndex < 0 || linkIndex >= movie.download_links.length) {
+      return res.status(400).json({ msg: 'Invalid link index' });
+    }
+    
+    if (!movie.download_links[linkIndex].click_count) {
+      movie.download_links[linkIndex].click_count = 0;
+    }
+    movie.download_links[linkIndex].click_count += 1;
+    
+    await movie.save();
+    res.json({ 
+      msg: 'Click tracked successfully',
+      click_count: movie.download_links[linkIndex].click_count 
+    });
+  } catch (err) {
+    console.error('Click tracking error:', err);
+    res.status(500).json({ 
+      msg: 'Click tracking failed', 
+      error: err.message
     });
   }
 });
