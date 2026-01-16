@@ -7,7 +7,7 @@ const app = express();
 connectDB();
 
 app.use(cors({
-  origin: ["https://filmy-cosmo-admin-dashboard.vercel.app", "http://localhost:5173"], // Add your Vercel URL here
+  origin: ["https://filmy-cosmo-admin-dashboard.vercel.app", "http://localhost:5173", "https://filmycosmo.vercel.app"], // Add your Vercel URL here
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
