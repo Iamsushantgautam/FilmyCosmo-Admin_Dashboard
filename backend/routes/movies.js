@@ -49,8 +49,9 @@ const normalizeDownloadLinks = (links) => {
 const generateShortLink = (longUrl) => {
   return new Promise((resolve, reject) => {
     try {
-      const apiToken = "f004680ca558e56e3d08f4b64e4a809f3a61845e";
-      const apiUrl = `https://adrinolinks.in/api?api=${apiToken}&url=${encodeURIComponent(longUrl)}`;
+      const apiToken = process.env.TERABOXLINKS_API_KEY;
+      const baseUrl = process.env.TERABOXLINKS_BASE_URL;
+      const apiUrl = `${baseUrl}?api=${apiToken}&url=${encodeURIComponent(longUrl)}`;
 
       https.get(apiUrl, (res) => {
         let data = '';
