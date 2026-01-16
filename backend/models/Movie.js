@@ -35,6 +35,7 @@ const MovieSchema = new mongoose.Schema(
     movie_year: Number,
     movie_tags: [String],
     movie_show: { type: Boolean, default: true },
+    trending: { type: Boolean, default: false },
 
     movie_genre: [String],
     movie_duration: String,

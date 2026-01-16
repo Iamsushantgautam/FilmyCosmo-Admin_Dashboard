@@ -18,7 +18,7 @@ export default function Dashboard() {
     movie_name: '', movie_year: '', movie_description: '', movie_tags: '', movie_poster: '',
     movie_genre: '', movie_duration: '', movie_language: '', movie_starcast: '',
     movie_type: 'movie', movie_size: '',
-    movie_show: true, movie_screenshots: ''
+    movie_show: true, trending: false, movie_screenshots: ''
   });
   const [posterFile, setPosterFile] = useState(null);
   const [screenshotFiles, setScreenshotFiles] = useState([]);
@@ -108,7 +108,7 @@ export default function Dashboard() {
       movie_name: '', movie_year: '', movie_description: '', movie_tags: '', movie_poster: '',
       movie_genre: '', movie_duration: '', movie_language: '', movie_starcast: '',
       movie_type: 'movie', movie_size: '',
-      movie_show: true, movie_screenshots: ''
+      movie_show: true, trending: false, movie_screenshots: ''
     });
     setPosterFile(null);
     setScreenshotFiles([]);
@@ -155,6 +155,7 @@ export default function Dashboard() {
       movie_type: movie.movie_type || 'movie',
       movie_size: movie.movie_size || '',
       movie_show: (movie.movie_show !== undefined) ? movie.movie_show : (movie.isActive !== false),
+      trending: movie.trending || false,
       movie_screenshots: join(movie.movie_screenshots || movie.screenshots)
     });
     setPosterFile(null);
@@ -208,6 +209,7 @@ export default function Dashboard() {
       data.append('movie_type', formData.movie_type);
       data.append('movie_size', formData.movie_size);
       data.append('movie_show', formData.movie_show);
+      data.append('trending', formData.trending);
       data.append('movie_screenshots', formData.movie_screenshots);
 
       // Send download links as JSON array
@@ -262,6 +264,32 @@ export default function Dashboard() {
     }
   };
 
+  const handleQuickUpdate = async (movie, field, value) => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API}/movies/${movie._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token
+        },
+        body: JSON.stringify({ [field]: value })
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.msg || 'Update failed');
+      }
+
+      // Update local state without refetching for smoother UX
+      setMovies(prev => prev.map(m =>
+        m._id === movie._id ? { ...m, [field]: value } : m
+      ));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   const filteredMovies = movies.filter(movie => {
     const name = movie.movie_name || movie.title || '';
     const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -295,6 +323,10 @@ export default function Dashboard() {
       const tags = movie.movie_tags || movie.tags || [];
       matchesTag = tags.some(t => t.toLowerCase() === tagFilter.toLowerCase());
     }
+
+    // Trending filter
+    const trendingFilter = searchParams.get('trending') === 'true';
+    if (trendingFilter && !movie.trending) return false;
 
     // Existing type filter
     const typeFilter = searchParams.get('type');
@@ -355,6 +387,22 @@ export default function Dashboard() {
                 <button onClick={() => openEditModal(movie)} className="btn-edit">
                   Edit
                 </button>
+                <div className="card-toggles">
+                  <button
+                    className={`btn-toggle ${movie.movie_show !== false ? 'active' : ''}`}
+                    onClick={() => handleQuickUpdate(movie, 'movie_show', !(movie.movie_show !== false))}
+                    title={movie.movie_show !== false ? "Hide Movie" : "Show Movie"}
+                  >
+                    {movie.movie_show !== false ? '👁️' : '🚫'}
+                  </button>
+                  <button
+                    className={`btn-toggle ${movie.trending ? 'active' : ''}`}
+                    onClick={() => handleQuickUpdate(movie, 'trending', !movie.trending)}
+                    title={movie.trending ? "Remove Trending" : "Mark Trending"}
+                  >
+                    {movie.trending ? '⭐' : '☆'}
+                  </button>
+                </div>
                 <button onClick={() => handleDelete(movie._id)} className="btn-delete">
                   Delete
                 </button>
@@ -573,6 +621,11 @@ export default function Dashboard() {
               <div className="checkbox-group">
                 <input type="checkbox" name="movie_show" checked={formData.movie_show} onChange={handleInputChange} id="movie_show" />
                 <label htmlFor="movie_show">Visible (Show on Home Page)</label>
+              </div>
+
+              <div className="checkbox-group" style={{ marginTop: '10px' }}>
+                <input type="checkbox" name="trending" checked={formData.trending} onChange={handleInputChange} id="trending" />
+                <label htmlFor="trending" style={{ color: '#FFD700' }}>⭐ Trending Movie</label>
               </div>
 
               <div className="modal-actions">

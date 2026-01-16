@@ -46,6 +46,9 @@ export default function App() {
           <Link to="/?movieshow=false" className={`nav-item ${location.search.includes('movieshow=false') ? 'active' : ''}`} onClick={closeDrawer}>
             Hidden Movies
           </Link>
+          <Link to="/?trending=true" className={`nav-item ${location.search.includes('trending=true') ? 'active' : ''}`} onClick={closeDrawer}>
+            Trending Movies
+          </Link>
 
           {token ? (
             <button onClick={handleLogout} className="nav-item">

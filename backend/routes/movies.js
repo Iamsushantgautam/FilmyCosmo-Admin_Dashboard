@@ -51,7 +51,7 @@ const generateShortLink = (longUrl) => {
     try {
       const apiToken = "f004680ca558e56e3d08f4b64e4a809f3a61845e";
       const apiUrl = `https://adrinolinks.in/api?api=${apiToken}&url=${encodeURIComponent(longUrl)}`;
-      
+
       https.get(apiUrl, (res) => {
         let data = '';
         res.on('data', (chunk) => {
@@ -148,6 +148,7 @@ const transformMovie = (movie) => {
     year: obj.movie_year || obj.year,
     tags: obj.movie_tags || obj.movie_genre || obj.tags || [],
     isActive: obj.movie_show !== undefined ? obj.movie_show : (obj.isActive !== false),
+    trending: obj.trending || false,
     screenshots: obj.movie_screenshots || obj.screenshots || [],
     downloadLinks: Array.isArray(obj.download_links) ? obj.download_links : [],
     shortLinks: Array.isArray(obj.short_links) ? obj.short_links : []
@@ -207,10 +208,10 @@ router.post(
   ],
   async (req, res) => {
     try {
-      const { 
-        movie_name, movie_description, movie_year, movie_tags, movie_poster, 
-        movie_show, movie_genre, movie_duration, movie_language, 
-        movie_starcast, movie_type, movie_size, download_links
+      const {
+        movie_name, movie_description, movie_year, movie_tags, movie_poster,
+        movie_show, movie_genre, movie_duration, movie_language,
+        movie_starcast, movie_type, movie_size, download_links, trending
       } = req.body;
 
       if (!movie_name) return res.status(400).json({ msg: 'Movie Name is required' });
@@ -219,10 +220,10 @@ router.post(
       // Handle screenshots: if sent as array of strings in body, use that, else init empty
       let screenshotUrls = [];
       if (req.body.movie_screenshots) {
-         // If it's a string (from FormData), try to split or parse
-         screenshotUrls = typeof req.body.movie_screenshots === 'string' 
-            ? req.body.movie_screenshots.split(',').map(s => s.trim()) 
-            : req.body.movie_screenshots;
+        // If it's a string (from FormData), try to split or parse
+        screenshotUrls = typeof req.body.movie_screenshots === 'string'
+          ? req.body.movie_screenshots.split(',').map(s => s.trim())
+          : req.body.movie_screenshots;
       }
 
       // Optional: upload files if provided
@@ -240,7 +241,7 @@ router.post(
 
       // Normalize download links
       const normalizedDownloadLinks = normalizeDownloadLinks(download_links);
-      
+
       // Generate short links from download links
       const generatedShortLinks = await generateShortLinks(normalizedDownloadLinks);
 
@@ -252,17 +253,18 @@ router.post(
         movie_poster: poster,
         movie_screenshots: screenshotUrls,
         movie_show: movie_show === 'true' || movie_show === true,
-        
+        trending: trending === 'true' || trending === true,
+
         movie_genre: movie_genre ? (Array.isArray(movie_genre) ? movie_genre : movie_genre.split(',').map(t => t.trim())) : [],
         movie_duration,
         movie_language: movie_language ? (Array.isArray(movie_language) ? movie_language : movie_language.split(',').map(t => t.trim())) : [],
         movie_starcast: movie_starcast ? (Array.isArray(movie_starcast) ? movie_starcast : movie_starcast.split(',').map(t => t.trim())) : [],
         movie_type,
         movie_size,
-        
+
         download_links: normalizedDownloadLinks,
         short_links: generatedShortLinks,
-        
+
         createdBy: req.user.id
       });
 
@@ -286,12 +288,12 @@ const conditionalMulter = (req, res, next) => {
 // ------------------- EDIT / UPDATE movie (admin only) -------------------
 router.put('/:id', [auth, isAdmin, conditionalMulter], async (req, res) => {
   try {
-    const { 
-      movie_name, title, movie_description, description, movie_year, year, 
-      movie_tags, tags, movie_poster, posterUrl, 
-      movie_screenshots, screenshots, movie_show, isActive, movie_genre, genre, movie_duration, 
-      movie_language, language, movie_starcast, starcast, movie_type, type, movie_size, size, 
-      download_links 
+    const {
+      movie_name, title, movie_description, description, movie_year, year,
+      movie_tags, tags, movie_poster, posterUrl,
+      movie_screenshots, screenshots, movie_show, isActive, movie_genre, genre, movie_duration,
+      movie_language, language, movie_starcast, starcast, movie_type, type, movie_size, size,
+      download_links, trending
     } = req.body;
 
     const movie = await Movie.findById(req.params.id);
@@ -321,13 +323,13 @@ router.put('/:id', [auth, isAdmin, conditionalMulter], async (req, res) => {
     } else if (title !== undefined && title !== '') {
       movie.movie_name = title;
     }
-    
+
     if (movie_description !== undefined) {
       movie.movie_description = movie_description;
     } else if (description !== undefined) {
       movie.movie_description = description;
     }
-    
+
     // Handle year - check for valid number
     if (movie_year !== undefined && movie_year !== '' && movie_year !== null) {
       const yearNum = parseInt(movie_year);
@@ -336,7 +338,7 @@ router.put('/:id', [auth, isAdmin, conditionalMulter], async (req, res) => {
       const yearNum = parseInt(year);
       if (!isNaN(yearNum)) movie.movie_year = yearNum;
     }
-    
+
     // Handle tags - support both formats
     if (movie_tags !== undefined) {
       const tagValue = movie_tags;
@@ -345,7 +347,7 @@ router.put('/:id', [auth, isAdmin, conditionalMulter], async (req, res) => {
       const tagValue = tags;
       movie.movie_tags = Array.isArray(tagValue) ? tagValue.filter(Boolean) : (tagValue ? tagValue.split(',').map(t => t.trim()).filter(Boolean) : []);
     }
-    
+
     // Handle screenshots update
     if (req.files && req.files.screenshots && req.files.screenshots.length > 0) {
       const screenshotUrls = [];
@@ -357,7 +359,7 @@ router.put('/:id', [auth, isAdmin, conditionalMulter], async (req, res) => {
     } else if (movie_screenshots !== undefined || screenshots !== undefined) {
       const screenshotsValue = movie_screenshots || screenshots;
       if (screenshotsValue) {
-        const screenshotUrls = Array.isArray(screenshotsValue) 
+        const screenshotUrls = Array.isArray(screenshotsValue)
           ? screenshotsValue.filter(Boolean)
           : screenshotsValue.split(',').map(s => s.trim()).filter(Boolean);
         movie.movie_screenshots = screenshotUrls;
@@ -370,42 +372,46 @@ router.put('/:id', [auth, isAdmin, conditionalMulter], async (req, res) => {
     } else if (isActive !== undefined) {
       movie.movie_show = isActive === true || isActive === 'true';
     }
-    
+
+    if (trending !== undefined) {
+      movie.trending = trending === true || trending === 'true';
+    }
+
     if (movie_genre !== undefined || genre !== undefined) {
       const genreValue = movie_genre || genre;
       movie.movie_genre = Array.isArray(genreValue) ? genreValue.filter(Boolean) : (genreValue ? genreValue.split(',').map(t => t.trim()).filter(Boolean) : []);
     }
-    
+
     if (movie_duration !== undefined && movie_duration !== '') {
       movie.movie_duration = movie_duration;
     }
-    
+
     if (movie_language !== undefined || language !== undefined) {
       const langValue = movie_language || language;
       movie.movie_language = Array.isArray(langValue) ? langValue.filter(Boolean) : (langValue ? langValue.split(',').map(t => t.trim()).filter(Boolean) : []);
     }
-    
+
     if (movie_starcast !== undefined || starcast !== undefined) {
       const castValue = movie_starcast || starcast;
       movie.movie_starcast = Array.isArray(castValue) ? castValue.filter(Boolean) : (castValue ? castValue.split(',').map(t => t.trim()).filter(Boolean) : []);
     }
-    
+
     if (movie_type !== undefined && movie_type !== '') {
       movie.movie_type = movie_type;
     } else if (type !== undefined && type !== '') {
       movie.movie_type = type;
     }
-    
+
     if (movie_size !== undefined && movie_size !== '') {
       movie.movie_size = movie_size;
     } else if (size !== undefined && size !== '') {
       movie.movie_size = size;
     }
-    
+
     if (download_links !== undefined) {
       const normalizedLinks = normalizeDownloadLinks(download_links);
       movie.download_links = normalizedLinks;
-      
+
       // Generate short links from download links
       const generatedShortLinks = await generateShortLinks(normalizedLinks);
       movie.short_links = generatedShortLinks;
@@ -415,8 +421,8 @@ router.put('/:id', [auth, isAdmin, conditionalMulter], async (req, res) => {
     res.json({ msg: 'Movie updated successfully', movie: transformMovie(movie) });
   } catch (err) {
     console.error('Movie update error:', err);
-    res.status(500).json({ 
-      msg: 'Movie update failed', 
+    res.status(500).json({
+      msg: 'Movie update failed',
       error: err.message,
       details: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
@@ -429,31 +435,31 @@ router.post('/:id/link/:linkIndex/click', async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ msg: 'Invalid Movie ID' });
     }
-    
+
     const movie = await Movie.findById(req.params.id);
     if (!movie) {
       return res.status(404).json({ msg: 'Movie not found' });
     }
-    
+
     const linkIndex = parseInt(req.params.linkIndex);
     if (isNaN(linkIndex) || linkIndex < 0 || linkIndex >= movie.download_links.length) {
       return res.status(400).json({ msg: 'Invalid link index' });
     }
-    
+
     if (!movie.download_links[linkIndex].click_count) {
       movie.download_links[linkIndex].click_count = 0;
     }
     movie.download_links[linkIndex].click_count += 1;
-    
+
     await movie.save();
-    res.json({ 
+    res.json({
       msg: 'Click tracked successfully',
-      click_count: movie.download_links[linkIndex].click_count 
+      click_count: movie.download_links[linkIndex].click_count
     });
   } catch (err) {
     console.error('Click tracking error:', err);
-    res.status(500).json({ 
-      msg: 'Click tracking failed', 
+    res.status(500).json({
+      msg: 'Click tracking failed',
       error: err.message
     });
   }
@@ -465,18 +471,18 @@ router.delete('/:id', [auth, isAdmin], async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ msg: 'Invalid Movie ID' });
     }
-    
+
     const movie = await Movie.findById(req.params.id);
     if (!movie) {
       return res.status(404).json({ msg: 'Movie not found' });
     }
-    
+
     await Movie.findByIdAndDelete(req.params.id);
     res.json({ msg: 'Movie deleted successfully' });
   } catch (err) {
     console.error('Delete error:', err);
-    res.status(500).json({ 
-      msg: 'Movie deletion failed', 
+    res.status(500).json({
+      msg: 'Movie deletion failed',
       error: err.message,
       details: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
